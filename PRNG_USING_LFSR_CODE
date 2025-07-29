@@ -1,0 +1,87 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 07/28/2025 08:13:11 AM
+// Design Name: 
+// Module Name: PNRG_USING_LFSR
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+module bit4_lfsr(input clk,reset,output reg [3:0] bit4_lfsr_op=4'b1111);
+wire feed=bit4_lfsr_op[3]^bit4_lfsr_op[0]; //primitive polynomial
+always@(posedge clk or negedge reset) begin
+if(reset!=1) bit4_lfsr_op<=4'b1111; //seeding
+else 
+bit4_lfsr_op<={feed,bit4_lfsr_op[3:1]}; //feedback
+end
+endmodule
+
+//64bit_lfsr
+module bit64_lfsr(input seed,clk,reset,feedback,[63:0]seedno,output reg[63:0]bit64_lfsr_op=64'd15); //seed-seed_status, seedno-seeding value
+always@(posedge clk or negedge reset) begin 
+if(reset==0) bit64_lfsr_op<=64'd15;
+else begin
+if(seed==0) //seed=0:- shifting of register continues
+bit64_lfsr_op<={feedback,bit64_lfsr_op[63:1]};
+else if (seed==1) //seed=1. new seed value will be given
+bit64_lfsr_op<=seedno;
+end
+end
+endmodule
+
+// filler pattern bit4 to bit64
+
+module bit4_to_bit64_expander(input clk,reset,input [3:0]bit4,output reg [63:0]bit64);
+parameter filler_pattern=60'h A5A5_A5A5_A5A5_A5A; //this pattern helps the 4bit lfsr output to convert to 64bit lfsr seed value.
+always@(posedge clk or negedge reset)
+begin
+if(reset==0) bit64<={filler_pattern,4'b1111}; 
+else bit64<={bit4,filler_pattern}; //seeding value of 64bit
+end
+always@(posedge clk) begin
+if(bit64==64'd0)
+bit64<={filler_pattern,4'b1010};  //block to overcome if by any chance the lfsr goes to 0 at any cycle forcing to non zero value.
+end
+endmodule
+
+//top module
+module PNRG_USING_LFSR(input clk,reset,seed_status,output [63:0] prn,seed_input);
+reg feedback; //feedback bit
+wire [3:0] bit4_lfsr_op; //based on this output, tapping mechanism depends
+wire [63:0] filler_op; //to seed 64bit lfsr. this is output from 4bit to 64bit expander
+bit4_lfsr a1(.clk(clk),.reset(reset),.bit4_lfsr_op(bit4_lfsr_op)); //instantiation of modules
+bit64_lfsr a2(.clk(clk),.reset(reset),.feedback(feedback),.seed(seed_status),.seedno(filler_op),.bit64_lfsr_op(prn));
+bit4_to_bit64_expander a3(.clk(clk),.reset(reset),.bit4(bit4_lfsr_op),.bit64(filler_op));
+assign seed_input=filler_op; 
+always@(posedge clk) begin
+case({bit4_lfsr_op})  // assigning primitive polynomials based on the 4bit lfsr output.
+4'd0:  feedback<= prn[63]^prn[3]^prn[2]^prn[0];
+4'd1:  feedback<= prn[63]^prn[7]^prn[6]^prn[5]^prn[2]^prn[1]^prn[0];
+4'd2:  feedback<= prn[63]^prn[5]^prn[4]^prn[0]^prn[1]^prn[3];
+4'd3:  feedback<= prn[63]^prn[5]^prn[4]^prn[1];
+4'd4:  feedback<= prn[63]^prn[7]^prn[4]^prn[2];
+4'd5: feedback<=prn[63]^prn[7]^prn[6]^prn[5]^prn[2]^prn[1];
+4'd6:  feedback<= prn[63]^prn[9]^prn[8]^prn[6]^prn[1]^prn[5]^prn[2];
+4'd7:  feedback<= prn[63]^prn[10]^prn[9]^prn[8]^prn[1]^prn[6];
+4'd8:  feedback<= prn[63]^prn[10]^prn[8]^prn[7]^prn[1]^prn[6]^prn[5];
+4'd9:  feedback<= prn[63]^prn[12]^prn[11]^prn[9]^prn[8]^prn[7]^prn[5]^prn[4];
+4'd10:  feedback<= prn[63]^prn[12]^prn[13]^prn[11]^prn[10]^prn[9]^prn[8]^prn[6];
+4'd11:  feedback<= prn[62]^prn[60]^prn[59];
+4'd12:  feedback<= prn[61]^prn[58]^prn[57];
+4'd13:  feedback<= prn[60]^prn[58]^prn[55];
+4'd14:  feedback<= prn[61]^prn[62]^prn[57]^prn[59]^prn[58];
+4'd15:  feedback<= prn[61]^prn[60]^prn[57]^prn[56]^prn[55];
+endcase
+end
+endmodule
